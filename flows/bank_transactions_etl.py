@@ -1,8 +1,13 @@
+from datetime import date, timedelta
+
+import httpx
 from prefect import flow, task
 from prefect.blocks.system import Secret
-import httpx
+from prefect.variables import Variable
+from supabase import create_client
 
 GOCARDLESS_BASE_URL = "https://bankaccountdata.gocardless.com/api/v2"
+SYNC_OVERLAP_DAYS = 7  # Margen de seguridad para capturar modificaciones
 
 
 @task
@@ -20,43 +25,124 @@ def get_access_token() -> str:
 
 
 @task
-def fetch_transactions(token: str, account_id: str) -> list:
+def get_last_sync_date() -> str | None:
+    """Obtiene la fecha de última sincronización."""
+    return Variable.get("gc_last_sync_date", default=None)
+
+
+@task
+async def update_last_sync_date(sync_date: str):
+    """Actualiza la fecha de última sincronización."""
+    await Variable.set("gc_last_sync_date", sync_date, overwrite=True)
+
+
+@task
+def fetch_transactions(token: str, account_id: str, date_from: str | None) -> list:
     """Descarga transacciones de la cuenta bancaria."""
+    params = {}
+    if date_from:
+        # Retroceder unos días para capturar posibles modificaciones
+        from_date = date.fromisoformat(date_from) - timedelta(days=SYNC_OVERLAP_DAYS)
+        params["date_from"] = from_date.isoformat()
+
     response = httpx.get(
         f"{GOCARDLESS_BASE_URL}/accounts/{account_id}/transactions/",
         headers={"Authorization": f"Bearer {token}"},
+        params=params,
     )
     response.raise_for_status()
     return response.json()["transactions"]["booked"]
 
 
 @task
-def normalize_and_dedupe(transactions: list) -> list:
-    """Normaliza y deduplica transacciones."""
-    # TODO: implementar lógica de normalización
-    # TODO: implementar deduplicación contra BD
-    return transactions
+def normalize_transactions(transactions: list) -> list:
+    """Normaliza transacciones al esquema interno."""
+    normalized = []
+    for tx in transactions:
+        normalized.append({
+            "transaction_id": tx.get("transactionId") or tx.get("internalTransactionId"),
+            "booking_date": tx.get("bookingDate"),
+            "value_date": tx.get("valueDate"),
+            "amount": float(tx["transactionAmount"]["amount"]),
+            "currency": tx["transactionAmount"]["currency"],
+            "description": tx.get("remittanceInformationUnstructured", ""),
+            "creditor_name": tx.get("creditorName"),
+            "debtor_name": tx.get("debtorName"),
+            "category_source": tx.get("proprietaryBankTransactionCode"),
+            "raw_data": tx,
+        })
+    return normalized
 
 
 @task
-def load_to_database(transactions: list):
-    """Inserta transacciones en la base de datos."""
-    # TODO: implementar inserción en Supabase/PostgreSQL
-    pass
+def get_supabase_client():
+    """Crea cliente de Supabase."""
+    url = Secret.load("supabase-url").get()
+    key = Secret.load("supabase-service-key").get()
+    return create_client(url, key)
+
+
+@task
+def load_to_database(transactions: list, account_id: str) -> int:
+    """
+    Inserta transacciones en transactions_raw.
+    Usa upsert para deduplicar por transaction_id.
+    """
+    if not transactions:
+        return 0
+
+    client = get_supabase_client()
+
+    # Preparar datos para upsert
+    rows = [
+        {
+            "transaction_id": tx["transaction_id"],
+            "account_id": account_id,
+            "booking_date": tx["booking_date"],
+            "value_date": tx["value_date"],
+            "amount": tx["amount"],
+            "currency": tx["currency"],
+            "description": tx["description"],
+            "creditor_name": tx["creditor_name"],
+            "debtor_name": tx["debtor_name"],
+            "category_source": tx["category_source"],
+            "raw_data": tx["raw_data"],
+        }
+        for tx in transactions
+    ]
+
+    # Upsert: inserta o actualiza si transaction_id ya existe
+    result = client.table("transactions_raw").upsert(
+        rows,
+        on_conflict="transaction_id",
+    ).execute()
+
+    return len(result.data)
 
 
 @flow(log_prints=True)
 def bank_transactions_etl():
-    """ETL de movimientos bancarios desde GoCardless."""
-    account_id = Secret.load("gc-account-id").get()
+    """ETL incremental de movimientos bancarios desde GoCardless."""
+    account_id = Variable.get("gc_account_id")
+    last_sync = get_last_sync_date()
+
+    if last_sync:
+        print(f"Sincronización incremental desde {last_sync}")
+    else:
+        print("Primera sincronización (completa)")
 
     token = get_access_token()
-    raw = fetch_transactions(token, account_id)
+    raw = fetch_transactions(token, account_id, last_sync)
     print(f"Descargadas {len(raw)} transacciones")
 
-    clean = normalize_and_dedupe(raw)
-    load_to_database(clean)
-    print("ETL completado")
+    normalized = normalize_transactions(raw)
+    inserted = load_to_database(normalized, account_id)
+    print(f"Procesadas {inserted} transacciones")
+
+    # Actualizar fecha de última sincronización
+    today = date.today().isoformat()
+    update_last_sync_date(today)
+    print(f"Próxima sincronización desde {today}")
 
 
 if __name__ == "__main__":
