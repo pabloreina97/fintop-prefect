@@ -1,0 +1,9 @@
+name: fintop-prefect
+
+deployments:
+  - name: bank-etl-daily
+    entrypoint: flows/bank_transactions_etl.py:bank_transactions_etl
+    schedule:
+      cron: "0 6 * * *"
+    work_pool:
+      name: default-agent-pool
