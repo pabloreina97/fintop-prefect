@@ -58,17 +58,18 @@ CREATE TABLE transactions_raw (
 );
 
 -- Categorías de transacciones
+-- user_id NULL = categoría global (visible para todos)
+-- user_id NOT NULL = categoría personalizada del usuario
 CREATE TABLE categories (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     icon TEXT,
     color TEXT,
     computable BOOLEAN DEFAULT TRUE,  -- FALSE = no cuenta en totales/gráficos
     parent_id UUID REFERENCES categories(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(user_id, name)
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Tabla user: solo la toca el frontend/usuario
@@ -166,9 +167,9 @@ CREATE POLICY accounts_update ON accounts
 CREATE POLICY accounts_delete ON accounts
     FOR DELETE USING (user_id = auth.uid());
 
--- Categories: usuario solo ve las suyas
+-- Categories: globales (user_id IS NULL) + propias del usuario
 CREATE POLICY categories_select ON categories
-    FOR SELECT USING (user_id = auth.uid());
+    FOR SELECT USING (user_id IS NULL OR user_id = auth.uid());
 
 CREATE POLICY categories_insert ON categories
     FOR INSERT WITH CHECK (user_id = auth.uid());
