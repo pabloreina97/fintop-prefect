@@ -81,8 +81,8 @@ CREATE TABLE transactions_user (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Vista combinada para el frontend
-CREATE VIEW transactions AS
+-- Vista combinada para el frontend (con filtro RLS)
+CREATE VIEW transactions WITH (security_invoker = true) AS
 SELECT
     r.id,
     r.account_id,
@@ -110,7 +110,8 @@ SELECT
 FROM transactions_raw r
 JOIN accounts a ON a.id = r.account_id
 LEFT JOIN transactions_user u ON u.transaction_raw_id = r.id
-LEFT JOIN categories c ON c.id = u.category_id;
+LEFT JOIN categories c ON c.id = u.category_id
+WHERE a.user_id = auth.uid();
 
 -- Índices
 CREATE INDEX idx_accounts_user ON accounts(user_id);
