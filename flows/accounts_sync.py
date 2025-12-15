@@ -81,7 +81,7 @@ def update_account_details(client, account_id: str, details: dict):
     return update_data
 
 
-@flow(log_prints=True)
+@task(cache_policy=NONE)
 def sync_account_details(client, token: str, account: dict):
     """Sincroniza los detalles de una cuenta individual."""
     account_id = account["id"]

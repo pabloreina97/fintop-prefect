@@ -45,7 +45,8 @@ def get_access_token() -> str:
 @task(cache_policy=NONE)
 def get_active_accounts(client) -> list:
     """Obtiene todas las cuentas activas de Supabase."""
-    result = client.table("accounts").select("*").eq("is_active", True).execute()
+    result = client.table("accounts").select(
+        "*").eq("is_active", True).execute()
     return result.data
 
 
@@ -54,7 +55,8 @@ def fetch_transactions(token: str, gocardless_account_id: str, date_from: str | 
     """Descarga transacciones de la cuenta bancaria."""
     params = {}
     if date_from:
-        from_date = date.fromisoformat(date_from) - timedelta(days=SYNC_OVERLAP_DAYS)
+        from_date = date.fromisoformat(
+            date_from) - timedelta(days=SYNC_OVERLAP_DAYS)
         params["date_from"] = from_date.isoformat()
 
     response = HTTP_CLIENT.get(
@@ -71,8 +73,10 @@ def normalize_transactions(transactions: list) -> list:
     """Normaliza transacciones al esquema interno."""
     normalized = []
     for tx in transactions:
-        description_array = tx.get("remittanceInformationUnstructuredArray", [])
-        description = " | ".join(description_array) if description_array else tx.get("remittanceInformationUnstructured", "")
+        description_array = tx.get(
+            "remittanceInformationUnstructuredArray", [])
+        description = " | ".join(description_array) if description_array else tx.get(
+            "remittanceInformationUnstructured", "")
 
         normalized.append({
             "transaction_id": tx.get("transactionId") or tx.get("internalTransactionId"),
@@ -159,7 +163,8 @@ def get_categorization_rules(client, user_id: str | None) -> list:
 @task(cache_policy=NONE)
 def get_categories_by_name(client) -> dict:
     """Obtiene mapeo nombre → id de categorías globales."""
-    result = client.table("categories").select("id, name").is_("user_id", "null").execute()
+    result = client.table("categories").select(
+        "id, name").is_("user_id", "null").execute()
     return {cat["name"]: cat["id"] for cat in result.data}
 
 
@@ -187,33 +192,21 @@ def match_rule(rule: dict, transaction: dict) -> bool:
 
 
 @task(cache_policy=NONE)
-def auto_categorize(client, transactions: list, user_id: str | None) -> dict:
+def auto_categorize(client, transactions: list, user_id: str | None, categories_map: dict) -> dict:
     """
-    Categoriza automáticamente las transacciones sin categoría.
-    Retorna estadísticas de categorización.
+    Categoriza automáticamente las transacciones.
+    Siempre actualiza auto_category_id, respetando category_id (override manual).
     """
     if not transactions:
         return {"total": 0, "categorized": 0, "percentage": 0}
 
-    # Obtener reglas y categorías
+    # Obtener reglas del usuario
     rules = get_categorization_rules(client, user_id)
-    categories_map = get_categories_by_name(client)
-
-    # Obtener transacciones sin categorizar
-    tx_ids = [tx["id"] for tx in transactions]
-    existing = client.table("transactions_user").select(
-        "transaction_raw_id"
-    ).in_("transaction_raw_id", tx_ids).execute()
-    already_categorized = {row["transaction_raw_id"] for row in existing.data}
 
     to_categorize = []
 
     for tx in transactions:
-        if tx["id"] in already_categorized:
-            continue
-
         category_id = None
-        rule_id = None
 
         # 1. Intentar con purpose_code
         purpose = tx.get("purpose_code")
@@ -226,17 +219,15 @@ def auto_categorize(client, transactions: list, user_id: str | None) -> dict:
             for rule in rules:
                 if match_rule(rule, tx):
                     category_id = rule["category_id"]
-                    rule_id = rule["id"]
                     break
 
         if category_id:
             to_categorize.append({
                 "transaction_raw_id": tx["id"],
-                "category_id": category_id,
-                "is_auto_categorized": True,
+                "auto_category_id": category_id,
             })
 
-    # Insertar categorizaciones
+    # Upsert: actualiza auto_category_id sin tocar category_id
     if to_categorize:
         client.table("transactions_user").upsert(
             to_categorize,
@@ -244,12 +235,11 @@ def auto_categorize(client, transactions: list, user_id: str | None) -> dict:
         ).execute()
 
     total = len(transactions)
-    categorized = len(to_categorize) + len(already_categorized)
+    categorized = len(to_categorize)
 
     return {
         "total": total,
         "categorized": categorized,
-        "new_categorized": len(to_categorize),
         "percentage": round(categorized / total * 100, 1) if total > 0 else 0,
     }
 
@@ -262,17 +252,19 @@ def update_account_last_sync(client, account_id: str):
     }).eq("id", account_id).execute()
 
 
-@flow(log_prints=True)
-def sync_account(client, token: str, account: dict):
+@task(cache_policy=NONE, log_prints=True)
+def sync_account(client, token: str, account: dict, categories_map: dict):
     """Sincroniza una cuenta bancaria individual."""
     account_id = account["id"]
     user_id = account["user_id"]
     gc_account_id = account["gocardless_account_id"]
-    account_name = account.get("account_name") or account.get("bank_name") or gc_account_id
+    account_name = account.get("account_name") or account.get(
+        "bank_name") or gc_account_id
     last_sync = account.get("last_sync_at")
 
     if last_sync:
-        last_sync_date = last_sync[:10] if isinstance(last_sync, str) else last_sync.date().isoformat()
+        last_sync_date = last_sync[:10] if isinstance(
+            last_sync, str) else last_sync.date().isoformat()
         print(f"[{account_name}] Sincronización incremental desde {last_sync_date}")
     else:
         last_sync_date = None
@@ -288,8 +280,8 @@ def sync_account(client, token: str, account: dict):
         print(f"[{account_name}] Guardadas {len(inserted)} transacciones")
 
         # Categorización automática
-        stats = auto_categorize(client, inserted, user_id)
-        print(f"[{account_name}] Categorizadas: {stats['new_categorized']} nuevas ({stats['percentage']}% total)")
+        stats = auto_categorize(client, inserted, user_id, categories_map)
+        print(f"[{account_name}] Auto-categorizadas: {stats['categorized']}/{stats['total']} ({stats['percentage']}%)")
 
     update_account_last_sync(client, account_id)
 
@@ -307,9 +299,10 @@ def bank_transactions_etl():
     print(f"Sincronizando {len(accounts)} cuenta(s)")
 
     token = get_access_token()
+    categories_map = get_categories_by_name(client)
 
     for account in accounts:
-        sync_account(client, token, account)
+        sync_account(client, token, account, categories_map)
 
     print("ETL completado")
 
