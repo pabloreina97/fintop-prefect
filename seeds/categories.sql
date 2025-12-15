@@ -1,5 +1,8 @@
 -- Categorías globales (user_id = NULL)
--- Ejecutar una sola vez para poblar la base de datos
+-- Se puede ejecutar múltiples veces (borra y recrea)
+
+-- Borrar categorías globales existentes
+DELETE FROM categories WHERE user_id IS NULL;
 
 -- Ingresos
 INSERT INTO categories (name, icon, color, computable) VALUES
@@ -18,7 +21,7 @@ INSERT INTO categories (name, icon, color, computable) VALUES
 ('Gas', 'flame', '#ea580c', TRUE),
 ('Agua', 'droplet', '#0ea5e9', TRUE),
 ('Internet y teléfono', 'wifi', '#6366f1', TRUE),
-('Seguro hogar', 'shield', '#8b5cf6', TRUE),
+('Seguros', 'shield', '#8b5cf6', TRUE),
 ('Mantenimiento hogar', 'wrench', '#a855f7', TRUE);
 
 -- Gastos - Alimentación
@@ -35,12 +38,13 @@ INSERT INTO categories (name, icon, color, computable) VALUES
 ('Taxi y VTC', 'car', '#334155', TRUE),
 ('Parking', 'square-parking', '#1e293b', TRUE),
 ('Seguro coche', 'shield', '#94a3b8', TRUE),
-('Mantenimiento coche', 'wrench', '#cbd5e1', TRUE);
+('Mantenimiento coche', 'wrench', '#cbd5e1', TRUE),
+('Préstamo coche', 'car', '#e2e8f0', TRUE);
 
 -- Gastos - Salud
 INSERT INTO categories (name, icon, color, computable) VALUES
 ('Farmacia', 'pill', '#ec4899', TRUE),
-('Médico', 'stethoscope', '#db2777', TRUE),
+('Salud', 'stethoscope', '#db2777', TRUE),
 ('Dentista', 'smile', '#be185d', TRUE),
 ('Seguro médico', 'heart-pulse', '#9d174d', TRUE);
 
@@ -81,4 +85,4 @@ INSERT INTO categories (name, icon, color, computable) VALUES
 INSERT INTO categories (name, icon, color, computable) VALUES
 ('Transferencia entre cuentas', 'arrow-left-right', '#71717a', FALSE),
 ('Ajuste de saldo', 'scale', '#52525b', FALSE),
-('Retirada efectivo', 'banknote', '#3f3f46', FALSE);
+('Ahorro e inversiones', 'banknote', '#3f3f46', FALSE);

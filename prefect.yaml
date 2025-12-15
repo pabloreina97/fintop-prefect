@@ -7,3 +7,8 @@ deployments:
       cron: "0 6 * * *"
     work_pool:
       name: default-agent-pool
+
+  - name: accounts-sync
+    entrypoint: flows/accounts_sync.py:accounts_sync
+    work_pool:
+      name: default-agent-pool
