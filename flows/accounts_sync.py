@@ -1,31 +1,28 @@
 """
-Flujo de sincronización de detalles de cuentas bancarias desde GoCardless.
+Sincronización de detalles de cuentas bancarias desde GoCardless.
 Actualiza bank_name, iban y otros detalles de las cuentas existentes.
 """
 
+import os
+
 import httpx
-from prefect import flow, task
-from prefect.blocks.system import Secret
-from prefect.cache_policies import NONE
 from supabase import create_client
 
 GOCARDLESS_BASE_URL = "https://bankaccountdata.gocardless.com/api/v2"
 HTTP_CLIENT = httpx.Client(timeout=60.0)
 
 
-@task
 def get_supabase_client():
     """Crea cliente de Supabase con service key (bypasses RLS)."""
-    url = Secret.load("supabase-url").get()
-    key = Secret.load("supabase-service-key").get()
+    url = os.environ["SUPABASE_URL"]
+    key = os.environ["SUPABASE_SERVICE_KEY"]
     return create_client(url, key)
 
 
-@task
 def get_access_token() -> str:
     """Obtiene token de acceso de GoCardless."""
-    secret_id = Secret.load("gc-secret-id").get()
-    secret_key = Secret.load("gc-secret-key").get()
+    secret_id = os.environ["GC_SECRET_ID"]
+    secret_key = os.environ["GC_SECRET_KEY"]
 
     response = httpx.post(
         f"{GOCARDLESS_BASE_URL}/token/new/",
@@ -35,14 +32,12 @@ def get_access_token() -> str:
     return response.json()["access"]
 
 
-@task(cache_policy=NONE)
 def get_accounts_to_sync(client) -> list:
     """Obtiene cuentas activas que necesitan sincronizar detalles."""
     result = client.table("accounts").select("*").eq("is_active", True).execute()
     return result.data
 
 
-@task(retries=3, retry_delay_seconds=[10, 30, 60])
 def fetch_account_details(token: str, gocardless_account_id: str) -> dict | None:
     """Obtiene detalles de una cuenta desde GoCardless."""
     try:
@@ -58,22 +53,15 @@ def fetch_account_details(token: str, gocardless_account_id: str) -> dict | None
         raise
 
 
-@task(cache_policy=NONE)
 def update_account_details(client, account_id: str, details: dict):
     """Actualiza los detalles de la cuenta en Supabase."""
     update_data = {}
 
-    # Mapeo de campos GoCardless → Supabase
     if details.get("iban"):
         update_data["iban"] = details["iban"]
 
     if details.get("name"):
-        # Si no hay account_name personalizado, usar el nombre del banco
         update_data["bank_name"] = details["name"]
-
-    if details.get("ownerName"):
-        # Podrías añadir este campo si lo necesitas
-        pass
 
     if update_data:
         client.table("accounts").update(update_data).eq("id", account_id).execute()
@@ -81,7 +69,6 @@ def update_account_details(client, account_id: str, details: dict):
     return update_data
 
 
-@task(cache_policy=NONE)
 def sync_account_details(client, token: str, account: dict):
     """Sincroniza los detalles de una cuenta individual."""
     account_id = account["id"]
@@ -104,9 +91,10 @@ def sync_account_details(client, token: str, account: dict):
         print(f"[{current_name}] Sin cambios")
 
 
-@flow(log_prints=True)
-def accounts_sync():
+def main():
     """Sincroniza detalles de todas las cuentas activas desde GoCardless."""
+    print("Iniciando sincronización de cuentas...")
+
     client = get_supabase_client()
     accounts = get_accounts_to_sync(client)
 
@@ -125,4 +113,4 @@ def accounts_sync():
 
 
 if __name__ == "__main__":
-    accounts_sync()
+    main()

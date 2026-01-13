@@ -1,10 +1,8 @@
+import os
 import re
 from datetime import date, datetime, timedelta
 
 import httpx
-from prefect import flow, task
-from prefect.blocks.system import Secret
-from prefect.cache_policies import NONE
 from supabase import create_client
 
 # Cliente HTTP con timeout más largo
@@ -20,19 +18,17 @@ PURPOSE_CODE_MAP = {
 }
 
 
-@task
 def get_supabase_client():
     """Crea cliente de Supabase con service key (bypasses RLS)."""
-    url = Secret.load("supabase-url").get()
-    key = Secret.load("supabase-service-key").get()
+    url = os.environ["SUPABASE_URL"]
+    key = os.environ["SUPABASE_SERVICE_KEY"]
     return create_client(url, key)
 
 
-@task
 def get_access_token() -> str:
     """Obtiene token de acceso de GoCardless."""
-    secret_id = Secret.load("gc-secret-id").get()
-    secret_key = Secret.load("gc-secret-key").get()
+    secret_id = os.environ["GC_SECRET_ID"]
+    secret_key = os.environ["GC_SECRET_KEY"]
 
     response = httpx.post(
         f"{GOCARDLESS_BASE_URL}/token/new/",
@@ -42,21 +38,17 @@ def get_access_token() -> str:
     return response.json()["access"]
 
 
-@task(cache_policy=NONE)
 def get_active_accounts(client) -> list:
     """Obtiene todas las cuentas activas de Supabase."""
-    result = client.table("accounts").select(
-        "*").eq("is_active", True).execute()
+    result = client.table("accounts").select("*").eq("is_active", True).execute()
     return result.data
 
 
-@task(retries=3, retry_delay_seconds=[10, 30, 60])
 def fetch_transactions(token: str, gocardless_account_id: str, date_from: str | None) -> list:
     """Descarga transacciones de la cuenta bancaria."""
     params = {}
     if date_from:
-        from_date = date.fromisoformat(
-            date_from) - timedelta(days=SYNC_OVERLAP_DAYS)
+        from_date = date.fromisoformat(date_from) - timedelta(days=SYNC_OVERLAP_DAYS)
         params["date_from"] = from_date.isoformat()
 
     response = HTTP_CLIENT.get(
@@ -68,13 +60,11 @@ def fetch_transactions(token: str, gocardless_account_id: str, date_from: str | 
     return response.json()["transactions"]["booked"]
 
 
-@task
 def normalize_transactions(transactions: list) -> list:
     """Normaliza transacciones al esquema interno."""
     normalized = []
     for tx in transactions:
-        description_array = tx.get(
-            "remittanceInformationUnstructuredArray", [])
+        description_array = tx.get("remittanceInformationUnstructuredArray", [])
         description = " | ".join(description_array) if description_array else tx.get(
             "remittanceInformationUnstructured", "")
 
@@ -101,7 +91,6 @@ def normalize_transactions(transactions: list) -> list:
     return normalized
 
 
-@task(cache_policy=NONE)
 def load_to_database(client, transactions: list, account_id: str) -> list:
     """
     Inserta transacciones en transactions_raw.
@@ -143,7 +132,6 @@ def load_to_database(client, transactions: list, account_id: str) -> list:
     return result.data
 
 
-@task(cache_policy=NONE)
 def get_categorization_rules(client, user_id: str | None) -> list:
     """Obtiene reglas de categorización (globales + usuario)."""
     query = client.table("categorization_rules").select(
@@ -160,11 +148,9 @@ def get_categorization_rules(client, user_id: str | None) -> list:
     return result.data
 
 
-@task(cache_policy=NONE)
 def get_categories_by_name(client) -> dict:
     """Obtiene mapeo nombre → id de categorías globales."""
-    result = client.table("categories").select(
-        "id, name").is_("user_id", "null").execute()
+    result = client.table("categories").select("id, name").is_("user_id", "null").execute()
     return {cat["name"]: cat["id"] for cat in result.data}
 
 
@@ -202,7 +188,6 @@ def match_amount(rule: dict, transaction: dict) -> bool | None:
     """
     Comprueba si el importe de una transacción cumple la condición de la regla.
     Retorna None si no hay condición de importe definida.
-    Operadores: gt, lt, gte, lte, eq, between
     """
     operator = rule.get("amount_operator")
     if not operator:
@@ -216,7 +201,6 @@ def match_amount(rule: dict, transaction: dict) -> bool | None:
     if tx_amount is None:
         return False
 
-    # Convertir a float para comparación
     tx_amount = float(tx_amount)
     amount_value = float(amount_value)
 
@@ -243,28 +227,22 @@ def match_rule(rule: dict, transaction: dict) -> bool:
     """
     Comprueba si una transacción coincide con una regla.
     Si hay patrón de texto Y condición de importe, ambos deben cumplirse (AND).
-    Si solo hay uno de los dos, solo se evalúa ese.
     """
     text_match = match_text(rule, transaction)
     amount_match = match_amount(rule, transaction)
 
-    # Si ambos están definidos, ambos deben cumplirse (AND)
     if text_match is not None and amount_match is not None:
         return text_match and amount_match
 
-    # Si solo hay texto
     if text_match is not None:
         return text_match
 
-    # Si solo hay importe
     if amount_match is not None:
         return amount_match
 
-    # Si no hay ninguna condición, no hay match
     return False
 
 
-@task(cache_policy=NONE)
 def auto_categorize(client, transactions: list, user_id: str | None, categories_map: dict) -> dict:
     """
     Categoriza automáticamente las transacciones.
@@ -273,9 +251,7 @@ def auto_categorize(client, transactions: list, user_id: str | None, categories_
     if not transactions:
         return {"total": 0, "categorized": 0, "percentage": 0}
 
-    # Obtener reglas del usuario
     rules = get_categorization_rules(client, user_id)
-
     to_categorize = []
 
     for tx in transactions:
@@ -300,7 +276,6 @@ def auto_categorize(client, transactions: list, user_id: str | None, categories_
                 "auto_category_id": category_id,
             })
 
-    # Upsert: actualiza auto_category_id sin tocar category_id
     if to_categorize:
         client.table("transactions_user").upsert(
             to_categorize,
@@ -317,7 +292,6 @@ def auto_categorize(client, transactions: list, user_id: str | None, categories_
     }
 
 
-@task(cache_policy=NONE)
 def update_account_last_sync(client, account_id: str):
     """Actualiza la fecha de última sincronización de la cuenta."""
     client.table("accounts").update({
@@ -325,25 +299,21 @@ def update_account_last_sync(client, account_id: str):
     }).eq("id", account_id).execute()
 
 
-@task(cache_policy=NONE, log_prints=True)
 def sync_account(client, token: str, account: dict, categories_map: dict):
     """Sincroniza una cuenta bancaria individual."""
     account_id = account["id"]
     user_id = account["user_id"]
     gc_account_id = account["gocardless_account_id"]
-    account_name = account.get("account_name") or account.get(
-        "bank_name") or gc_account_id
+    account_name = account.get("account_name") or account.get("bank_name") or gc_account_id
     last_sync = account.get("last_sync_at")
 
     if last_sync:
-        last_sync_date = last_sync[:10] if isinstance(
-            last_sync, str) else last_sync.date().isoformat()
+        last_sync_date = last_sync[:10] if isinstance(last_sync, str) else last_sync.date().isoformat()
         print(f"[{account_name}] Sincronización incremental desde {last_sync_date}")
     else:
         last_sync_date = None
         print(f"[{account_name}] Primera sincronización (completa)")
 
-    # Descargar y guardar transacciones
     raw = fetch_transactions(token, gc_account_id, last_sync_date)
     print(f"[{account_name}] Descargadas {len(raw)} transacciones")
 
@@ -352,16 +322,16 @@ def sync_account(client, token: str, account: dict, categories_map: dict):
         inserted = load_to_database(client, normalized, account_id)
         print(f"[{account_name}] Guardadas {len(inserted)} transacciones")
 
-        # Categorización automática
         stats = auto_categorize(client, inserted, user_id, categories_map)
         print(f"[{account_name}] Auto-categorizadas: {stats['categorized']}/{stats['total']} ({stats['percentage']}%)")
 
     update_account_last_sync(client, account_id)
 
 
-@flow(log_prints=True)
-def bank_transactions_etl():
+def main():
     """ETL de movimientos bancarios para todas las cuentas activas."""
+    print("Iniciando ETL de transacciones bancarias...")
+
     client = get_supabase_client()
     accounts = get_active_accounts(client)
 
@@ -381,4 +351,4 @@ def bank_transactions_etl():
 
 
 if __name__ == "__main__":
-    bank_transactions_etl()
+    main()
