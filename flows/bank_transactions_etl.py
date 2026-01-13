@@ -168,11 +168,18 @@ def get_categories_by_name(client) -> dict:
     return {cat["name"]: cat["id"] for cat in result.data}
 
 
-def match_rule(rule: dict, transaction: dict) -> bool:
-    """Comprueba si una transacción coincide con una regla."""
+def match_text(rule: dict, transaction: dict) -> bool | None:
+    """
+    Comprueba si una transacción coincide con el patrón de texto de una regla.
+    Retorna None si no hay patrón definido.
+    """
+    pattern = rule.get("pattern")
+    if not pattern:
+        return None
+
     field = rule["field"]
-    pattern = rule["pattern"].lower()
     match_type = rule["match_type"]
+    pattern = pattern.lower()
 
     value = transaction.get(field) or ""
     value = value.lower()
@@ -188,6 +195,72 @@ def match_rule(rule: dict, transaction: dict) -> bool:
             return bool(re.search(pattern, value, re.IGNORECASE))
         except re.error:
             return False
+    return False
+
+
+def match_amount(rule: dict, transaction: dict) -> bool | None:
+    """
+    Comprueba si el importe de una transacción cumple la condición de la regla.
+    Retorna None si no hay condición de importe definida.
+    Operadores: gt, lt, gte, lte, eq, between
+    """
+    operator = rule.get("amount_operator")
+    if not operator:
+        return None
+
+    amount_value = rule.get("amount_value")
+    if amount_value is None:
+        return None
+
+    tx_amount = transaction.get("amount")
+    if tx_amount is None:
+        return False
+
+    # Convertir a float para comparación
+    tx_amount = float(tx_amount)
+    amount_value = float(amount_value)
+
+    if operator == "gt":
+        return tx_amount > amount_value
+    elif operator == "lt":
+        return tx_amount < amount_value
+    elif operator == "gte":
+        return tx_amount >= amount_value
+    elif operator == "lte":
+        return tx_amount <= amount_value
+    elif operator == "eq":
+        return tx_amount == amount_value
+    elif operator == "between":
+        amount_max = rule.get("amount_value_max")
+        if amount_max is None:
+            return False
+        return amount_value <= tx_amount <= float(amount_max)
+
+    return False
+
+
+def match_rule(rule: dict, transaction: dict) -> bool:
+    """
+    Comprueba si una transacción coincide con una regla.
+    Si hay patrón de texto Y condición de importe, ambos deben cumplirse (AND).
+    Si solo hay uno de los dos, solo se evalúa ese.
+    """
+    text_match = match_text(rule, transaction)
+    amount_match = match_amount(rule, transaction)
+
+    # Si ambos están definidos, ambos deben cumplirse (AND)
+    if text_match is not None and amount_match is not None:
+        return text_match and amount_match
+
+    # Si solo hay texto
+    if text_match is not None:
+        return text_match
+
+    # Si solo hay importe
+    if amount_match is not None:
+        return amount_match
+
+    # Si no hay ninguna condición, no hay match
     return False
 
 
