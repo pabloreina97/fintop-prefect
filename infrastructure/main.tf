@@ -14,6 +14,9 @@ provider "google" {
   region  = var.gcp_region
 }
 
+# Obtener información del proyecto
+data "google_project" "project" {}
+
 # Artifact Registry para imágenes Docker
 resource "google_artifact_registry_repository" "flows" {
   repository_id = "etl-flows"
@@ -36,11 +39,18 @@ resource "google_project_iam_member" "cloud_run_invoker" {
   member  = "serviceAccount:${google_service_account.etl.email}"
 }
 
-# Permiso: Leer imágenes del Artifact Registry
+# Permiso: Leer imágenes del Artifact Registry (para el ETL service account)
 resource "google_project_iam_member" "artifact_registry_reader" {
   project = var.gcp_project
   role    = "roles/artifactregistry.reader"
   member  = "serviceAccount:${google_service_account.etl.email}"
+}
+
+# Permiso: Cloud Run Service Agent necesita leer imágenes del Artifact Registry
+resource "google_project_iam_member" "cloud_run_agent_artifact_registry" {
+  project = var.gcp_project
+  role    = "roles/artifactregistry.reader"
+  member  = "serviceAccount:service-${data.google_project.project.number}@serverless-robot-prod.iam.gserviceaccount.com"
 }
 
 # Cloud Run Job - ETL de transacciones
