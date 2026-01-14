@@ -69,6 +69,13 @@ resource "google_service_account_iam_member" "github_actions_wif" {
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_repo}"
 }
 
+# Permitir que GitHub Actions use el service account del ETL (para actualizar Cloud Run Job)
+resource "google_service_account_iam_member" "github_actions_act_as_etl" {
+  service_account_id = google_service_account.etl.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:${google_service_account.github_actions.email}"
+}
+
 # Artifact Registry para imágenes Docker
 resource "google_artifact_registry_repository" "flows" {
   repository_id = "etl-flows"
