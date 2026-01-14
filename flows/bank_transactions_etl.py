@@ -299,6 +299,105 @@ def update_account_last_sync(client, account_id: str):
     }).eq("id", account_id).execute()
 
 
+def detect_internal_transfers(client, user_id: str, categories_map: dict) -> dict:
+    """
+    Detecta transferencias internas emparejando transacciones opuestas.
+    Busca pares de transacciones donde:
+    - Mismo usuario, diferentes cuentas
+    - Mismo importe pero signo opuesto
+    - Misma fecha (booking_date)
+    - Sin categoría asignada aún
+    """
+    transfer_category_id = categories_map.get("Transferencia entre cuentas")
+    if not transfer_category_id:
+        return {"detected": 0}
+
+    accounts_result = client.table("accounts").select("id").eq("user_id", user_id).execute()
+    account_ids = [a["id"] for a in accounts_result.data]
+
+    if len(account_ids) < 2:
+        return {"detected": 0}
+
+    # Obtener transacciones sin categoría del usuario
+    transactions_result = client.table("transactions_raw").select(
+        "id, account_id, booking_date, amount"
+    ).in_("account_id", account_ids).execute()
+
+    # Obtener categorías existentes
+    tx_ids = [t["id"] for t in transactions_result.data]
+    if not tx_ids:
+        return {"detected": 0}
+
+    user_data_result = client.table("transactions_user").select(
+        "transaction_raw_id, auto_category_id, category_id"
+    ).in_("transaction_raw_id", tx_ids).execute()
+
+    categorized = {
+        row["transaction_raw_id"]: row
+        for row in user_data_result.data
+    }
+
+    # Indexar transacciones por (fecha, monto) para búsqueda eficiente
+    # Convertir amount a float para comparaciones consistentes
+    by_date_amount = {}
+    for tx in transactions_result.data:
+        amount = float(tx["amount"])
+        key = (tx["booking_date"], amount)
+        if key not in by_date_amount:
+            by_date_amount[key] = []
+        by_date_amount[key].append({**tx, "amount": amount})
+
+    # Buscar pares opuestos
+    to_update = []
+    processed_ids = set()
+
+    for tx in transactions_result.data:
+        if tx["id"] in processed_ids:
+            continue
+
+        amount = float(tx["amount"])
+        # Buscar transacción opuesta (mismo día, monto negado, diferente cuenta)
+        opposite_key = (tx["booking_date"], -amount)
+        candidates = by_date_amount.get(opposite_key, [])
+
+        for candidate in candidates:
+            if candidate["account_id"] == tx["account_id"]:
+                continue
+            if candidate["id"] in processed_ids:
+                continue
+
+            # Verificar que al menos una no tenga categoría
+            tx_cat = categorized.get(tx["id"])
+            cand_cat = categorized.get(candidate["id"])
+
+            tx_has_category = tx_cat and (tx_cat.get("category_id") or tx_cat.get("auto_category_id"))
+            cand_has_category = cand_cat and (cand_cat.get("category_id") or cand_cat.get("auto_category_id"))
+
+            # Categorizar ambas como transferencia interna
+            if not tx_has_category:
+                to_update.append({
+                    "transaction_raw_id": tx["id"],
+                    "auto_category_id": transfer_category_id,
+                })
+            if not cand_has_category:
+                to_update.append({
+                    "transaction_raw_id": candidate["id"],
+                    "auto_category_id": transfer_category_id,
+                })
+
+            processed_ids.add(tx["id"])
+            processed_ids.add(candidate["id"])
+            break
+
+    if to_update:
+        client.table("transactions_user").upsert(
+            to_update,
+            on_conflict="transaction_raw_id",
+        ).execute()
+
+    return {"detected": len(to_update)}
+
+
 def sync_account(client, token: str, account: dict, categories_map: dict):
     """Sincroniza una cuenta bancaria individual."""
     account_id = account["id"]
@@ -346,6 +445,18 @@ def main():
 
     for account in accounts:
         sync_account(client, token, account, categories_map)
+
+    # Detectar transferencias internas por usuario
+    user_ids = set(account["user_id"] for account in accounts)
+    print(f"Detectando transferencias internas para {len(user_ids)} usuario(s)...")
+
+    total_detected = 0
+    for user_id in user_ids:
+        stats = detect_internal_transfers(client, user_id, categories_map)
+        total_detected += stats["detected"]
+
+    if total_detected > 0:
+        print(f"Transferencias internas detectadas: {total_detected}")
 
     print("ETL completado")
 
