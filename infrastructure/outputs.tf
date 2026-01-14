@@ -22,3 +22,14 @@ output "service_account_email" {
   description = "Email del Service Account"
   value       = google_service_account.etl.email
 }
+
+# GitHub Actions secrets
+output "github_actions_wif_provider" {
+  description = "WIF_PROVIDER secret para GitHub Actions"
+  value       = google_iam_workload_identity_pool_provider.github_actions.name
+}
+
+output "github_actions_service_account" {
+  description = "WIF_SERVICE_ACCOUNT secret para GitHub Actions"
+  value       = google_service_account.github_actions.email
+}

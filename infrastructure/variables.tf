@@ -34,3 +34,10 @@ variable "gc_secret_key" {
   type        = string
   sensitive   = true
 }
+
+# GitHub
+variable "github_repo" {
+  description = "GitHub repository (owner/repo)"
+  type        = string
+  default     = "pabloreina97/fintop-prefect"
+}

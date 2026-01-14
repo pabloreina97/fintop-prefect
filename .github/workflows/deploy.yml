@@ -1,0 +1,49 @@
+name: Deploy ETL
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'flows/**'
+      - 'requirements.txt'
+      - 'Dockerfile'
+
+env:
+  GCP_PROJECT: fintop-a0a58
+  GCP_REGION: europe-west1
+  IMAGE: europe-west1-docker.pkg.dev/fintop-a0a58/etl-flows/fintop
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.WIF_PROVIDER }}
+          service_account: ${{ secrets.WIF_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Build and push image
+        run: |
+          docker build -t ${{ env.IMAGE }}:${{ github.sha }} -t ${{ env.IMAGE }}:latest .
+          docker push ${{ env.IMAGE }}:${{ github.sha }}
+          docker push ${{ env.IMAGE }}:latest
+
+      - name: Update Cloud Run Job
+        run: |
+          gcloud run jobs update bank-transactions-etl \
+            --region ${{ env.GCP_REGION }} \
+            --image ${{ env.IMAGE }}:${{ github.sha }}
