@@ -4,88 +4,88 @@
 -- Borrar categorías globales existentes
 DELETE FROM categories WHERE user_id IS NULL;
 
--- Ingresos (Verdes)
+-- Ingresos (Verde esmeralda)
 INSERT INTO categories (name, icon, color, computable, group_name) VALUES
-('Nómina', 'briefcase', '#22c55e', TRUE, 'Ingresos'),
-('Freelance', 'laptop', '#16a34a', TRUE, 'Ingresos'),
-('Inversiones', 'trending-up', '#15803d', TRUE, 'Ingresos'),
-('Reembolsos', 'rotate-ccw', '#4ade80', TRUE, 'Ingresos'),
+('Nómina', 'briefcase', '#34d399', TRUE, 'Ingresos'),
+('Freelance', 'laptop', '#34d399', TRUE, 'Ingresos'),
+('Inversiones', 'trending-up', '#34d399', TRUE, 'Ingresos'),
+('Reembolsos', 'rotate-ccw', '#34d399', TRUE, 'Ingresos'),
 ('Ayudas y subvenciones', 'landmark', '#34d399', TRUE, 'Ingresos'),
-('Otros ingresos', 'plus-circle', '#a3e635', TRUE, 'Ingresos');
+('Otros ingresos', 'plus-circle', '#34d399', TRUE, 'Ingresos');
 
--- Gastos - Hogar (Azules/Índigo)
+-- Gastos - Hogar (Índigo)
 INSERT INTO categories (name, icon, color, computable, group_name) VALUES
-('Alquiler', 'home', '#3b82f6', TRUE, 'Hogar'),
-('Hipoteca', 'home', '#2563eb', TRUE, 'Hogar'),
-('Luz', 'zap', '#60a5fa', TRUE, 'Hogar'),
-('Gas', 'flame', '#1d4ed8', TRUE, 'Hogar'),
-('Agua', 'droplet', '#38bdf8', TRUE, 'Hogar'),
-('Internet y teléfono', 'wifi', '#6366f1', TRUE, 'Hogar'),
+('Alquiler', 'home', '#818cf8', TRUE, 'Hogar'),
+('Hipoteca', 'home', '#818cf8', TRUE, 'Hogar'),
+('Luz', 'zap', '#818cf8', TRUE, 'Hogar'),
+('Gas', 'flame', '#818cf8', TRUE, 'Hogar'),
+('Agua', 'droplet', '#818cf8', TRUE, 'Hogar'),
+('Internet y teléfono', 'wifi', '#818cf8', TRUE, 'Hogar'),
 ('Seguros', 'shield', '#818cf8', TRUE, 'Hogar'),
-('Mantenimiento hogar', 'wrench', '#4f46e5', TRUE, 'Hogar'),
-('Comunidad de vecinos', 'building', '#a5b4fc', TRUE, 'Hogar'),
-('Servicio doméstico', 'spray-can', '#c7d2fe', TRUE, 'Hogar');
+('Mantenimiento hogar', 'wrench', '#818cf8', TRUE, 'Hogar'),
+('Comunidad de vecinos', 'building', '#818cf8', TRUE, 'Hogar'),
+('Servicio doméstico', 'brush-cleaning', '#818cf8', TRUE, 'Hogar');
 
--- Gastos - Alimentación (Naranjas/Ámbar)
+-- Gastos - Alimentación (Ámbar)
 INSERT INTO categories (name, icon, color, computable, group_name) VALUES
-('Supermercado', 'shopping-cart', '#f59e0b', TRUE, 'Alimentación'),
-('Restaurantes', 'utensils', '#d97706', TRUE, 'Alimentación'),
-('Cafeterías', 'coffee', '#b45309', TRUE, 'Alimentación'),
-('Comida a domicilio', 'package', '#92400e', TRUE, 'Alimentación');
+('Supermercado', 'shopping-cart', '#fbbf24', TRUE, 'Alimentación'),
+('Restaurantes', 'utensils', '#fbbf24', TRUE, 'Alimentación'),
+('Cafeterías', 'coffee', '#fbbf24', TRUE, 'Alimentación'),
+('Comida a domicilio', 'package', '#fbbf24', TRUE, 'Alimentación');
 
--- Gastos - Transporte (Celestes/Sky)
+-- Gastos - Transporte (Celeste)
 INSERT INTO categories (name, icon, color, computable, group_name) VALUES
-('Gasolina', 'fuel', '#0ea5e9', TRUE, 'Transporte'),
-('Transporte público', 'train', '#0284c7', TRUE, 'Transporte'),
-('Taxi y VTC', 'car', '#0369a1', TRUE, 'Transporte'),
-('Parking', 'square-parking', '#075985', TRUE, 'Transporte'),
+('Gasolina', 'fuel', '#38bdf8', TRUE, 'Transporte'),
+('Transporte público', 'train', '#38bdf8', TRUE, 'Transporte'),
+('Taxi y VTC', 'car', '#38bdf8', TRUE, 'Transporte'),
+('Parking', 'square-parking', '#38bdf8', TRUE, 'Transporte'),
 ('Seguro coche', 'shield', '#38bdf8', TRUE, 'Transporte'),
-('Mantenimiento coche', 'wrench', '#7dd3fc', TRUE, 'Transporte'),
-('Préstamo coche', 'car', '#0c4a6e', TRUE, 'Transporte');
+('Mantenimiento coche', 'wrench', '#38bdf8', TRUE, 'Transporte'),
+('Préstamo coche', 'car', '#38bdf8', TRUE, 'Transporte');
 
--- Gastos - Salud (Rosas)
+-- Gastos - Salud (Rosa)
 INSERT INTO categories (name, icon, color, computable, group_name) VALUES
-('Farmacia', 'pill', '#ec4899', TRUE, 'Salud'),
-('Salud', 'stethoscope', '#db2777', TRUE, 'Salud'),
-('Dentista', 'smile', '#be185d', TRUE, 'Salud'),
-('Seguro médico', 'heart-pulse', '#9d174d', TRUE, 'Salud'),
+('Farmacia', 'pill', '#f472b6', TRUE, 'Salud'),
+('Salud', 'stethoscope', '#f472b6', TRUE, 'Salud'),
+('Dentista', 'smile', '#f472b6', TRUE, 'Salud'),
+('Seguro médico', 'heart-pulse', '#f472b6', TRUE, 'Salud'),
 ('Belleza', 'sparkles', '#f472b6', TRUE, 'Salud');
 
--- Gastos - Ocio y entretenimiento (Violetas)
+-- Gastos - Ocio y entretenimiento (Violeta)
 INSERT INTO categories (name, icon, color, computable, group_name) VALUES
 ('Suscripciones', 'tv', '#a78bfa', TRUE, 'Ocio'),
-('Cine y espectáculos', 'clapperboard', '#7c3aed', TRUE, 'Ocio'),
-('Deportes y gimnasio', 'dumbbell', '#6d28d9', TRUE, 'Ocio'),
-('Viajes', 'plane', '#8b5cf6', TRUE, 'Ocio'),
-('Hobbies', 'gamepad-2', '#5b21b6', TRUE, 'Ocio');
+('Cine y espectáculos', 'clapperboard', '#a78bfa', TRUE, 'Ocio'),
+('Deportes y gimnasio', 'dumbbell', '#a78bfa', TRUE, 'Ocio'),
+('Viajes', 'plane', '#a78bfa', TRUE, 'Ocio'),
+('Hobbies', 'gamepad-2', '#a78bfa', TRUE, 'Ocio');
 
--- Gastos - Compras (Cyans)
+-- Gastos - Compras (Cyan)
 INSERT INTO categories (name, icon, color, computable, group_name) VALUES
-('Ropa y calzado', 'shirt', '#06b6d4', TRUE, 'Compras'),
-('Electrónica', 'smartphone', '#0891b2', TRUE, 'Compras'),
-('Hogar y decoración', 'sofa', '#0e7490', TRUE, 'Compras'),
-('Regalos', 'gift', '#155e75', TRUE, 'Compras');
+('Ropa y calzado', 'shirt', '#22d3ee', TRUE, 'Compras'),
+('Electrónica', 'smartphone', '#22d3ee', TRUE, 'Compras'),
+('Hogar y decoración', 'sofa', '#22d3ee', TRUE, 'Compras'),
+('Regalos', 'gift', '#22d3ee', TRUE, 'Compras');
 
 -- Gastos - Educación y familia (Teal)
 INSERT INTO categories (name, icon, color, computable, group_name) VALUES
-('Educación', 'graduation-cap', '#14b8a6', TRUE, 'Familia'),
-('Guardería', 'baby', '#0d9488', TRUE, 'Familia'),
-('Hijos', 'users', '#0f766e', TRUE, 'Familia'),
-('Mascotas', 'dog', '#115e59', TRUE, 'Familia');
+('Educación', 'graduation-cap', '#2dd4bf', TRUE, 'Familia'),
+('Guardería', 'baby', '#2dd4bf', TRUE, 'Familia'),
+('Hijos', 'users', '#2dd4bf', TRUE, 'Familia'),
+('Mascotas', 'dog', '#2dd4bf', TRUE, 'Familia');
 
--- Gastos - Finanzas (Rose/Rojos)
+-- Gastos - Finanzas (Rose)
 INSERT INTO categories (name, icon, color, computable, group_name) VALUES
-('Impuestos', 'receipt', '#e11d48', TRUE, 'Finanzas'),
-('Comisiones bancarias', 'landmark', '#be123c', TRUE, 'Finanzas'),
-('Préstamos', 'banknote', '#9f1239', TRUE, 'Finanzas'),
-('Donaciones', 'heart-handshake', '#f43f5e', TRUE, 'Finanzas');
+('Impuestos', 'receipt', '#fb7185', TRUE, 'Finanzas'),
+('Comisiones bancarias', 'landmark', '#fb7185', TRUE, 'Finanzas'),
+('Préstamos', 'banknote', '#fb7185', TRUE, 'Finanzas'),
+('Donaciones', 'heart-handshake', '#fb7185', TRUE, 'Finanzas');
 
--- Gastos - Otros (Marrón cálido)
+-- Gastos - Otros (Piedra)
 INSERT INTO categories (name, icon, color, computable, group_name) VALUES
-('Otros gastos', 'circle-dot', '#a1887f', TRUE, 'Otros');
+('Otros gastos', 'circle-dot', '#a8a29e', TRUE, 'Otros');
 
--- No computables - Grises (único grupo con grises)
+-- No computables (Gris)
 INSERT INTO categories (name, icon, color, computable, group_name) VALUES
-('Transferencia entre cuentas', 'arrow-left-right', '#71717a', FALSE, 'No computable'),
-('Ajuste de saldo', 'scale', '#52525b', FALSE, 'No computable'),
-('Ahorro e inversiones', 'banknote', '#3f3f46', FALSE, 'No computable');
+('Transferencia entre cuentas', 'arrow-left-right', '#9ca3af', FALSE, 'No computable'),
+('Ajuste de saldo', 'scale', '#9ca3af', FALSE, 'No computable'),
+('Ahorro e inversiones', 'banknote', '#9ca3af', FALSE, 'No computable');
