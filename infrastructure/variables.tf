@@ -41,3 +41,18 @@ variable "github_repo" {
   type        = string
   default     = "pabloreina97/fintop-prefect"
 }
+
+# Telegram
+variable "telegram_bot_token" {
+  description = "Telegram bot token for notifications"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "telegram_chat_id" {
+  description = "Telegram chat ID for notifications"
+  type        = string
+  sensitive   = true
+  default     = ""
+}

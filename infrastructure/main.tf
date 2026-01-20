@@ -145,6 +145,14 @@ resource "google_cloud_run_v2_job" "bank_etl" {
           name  = "GC_SECRET_KEY"
           value = var.gc_secret_key
         }
+        env {
+          name  = "TELEGRAM_BOT_TOKEN"
+          value = var.telegram_bot_token
+        }
+        env {
+          name  = "TELEGRAM_CHAT_ID"
+          value = var.telegram_chat_id
+        }
       }
 
       service_account = google_service_account.etl.email

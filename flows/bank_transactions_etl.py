@@ -1,9 +1,12 @@
 import os
 import re
+import traceback
 from datetime import date, datetime, timedelta
 
 import httpx
 from supabase import create_client
+
+from telegram import notify_etl_error, notify_etl_success
 
 # Cliente HTTP con timeout más largo
 HTTP_CLIENT = httpx.Client(timeout=60.0)
@@ -431,34 +434,43 @@ def main():
     """ETL de movimientos bancarios para todas las cuentas activas."""
     print("Iniciando ETL de transacciones bancarias...")
 
-    client = get_supabase_client()
-    accounts = get_active_accounts(client)
+    try:
+        client = get_supabase_client()
+        accounts = get_active_accounts(client)
 
-    if not accounts:
-        print("No hay cuentas activas para sincronizar")
-        return
+        if not accounts:
+            print("No hay cuentas activas para sincronizar")
+            notify_etl_success(accounts_count=0)
+            return
 
-    print(f"Sincronizando {len(accounts)} cuenta(s)")
+        print(f"Sincronizando {len(accounts)} cuenta(s)")
 
-    token = get_access_token()
-    categories_map = get_categories_by_name(client)
+        token = get_access_token()
+        categories_map = get_categories_by_name(client)
 
-    for account in accounts:
-        sync_account(client, token, account, categories_map)
+        for account in accounts:
+            sync_account(client, token, account, categories_map)
 
-    # Detectar transferencias internas por usuario
-    user_ids = set(account["user_id"] for account in accounts)
-    print(f"Detectando transferencias internas para {len(user_ids)} usuario(s)...")
+        # Detectar transferencias internas por usuario
+        user_ids = set(account["user_id"] for account in accounts)
+        print(f"Detectando transferencias internas para {len(user_ids)} usuario(s)...")
 
-    total_detected = 0
-    for user_id in user_ids:
-        stats = detect_internal_transfers(client, user_id, categories_map)
-        total_detected += stats["detected"]
+        total_detected = 0
+        for user_id in user_ids:
+            stats = detect_internal_transfers(client, user_id, categories_map)
+            total_detected += stats["detected"]
 
-    if total_detected > 0:
-        print(f"Transferencias internas detectadas: {total_detected}")
+        if total_detected > 0:
+            print(f"Transferencias internas detectadas: {total_detected}")
 
-    print("ETL completado")
+        print("ETL completado")
+        notify_etl_success(accounts_count=len(accounts), transfers_detected=total_detected)
+
+    except Exception as e:
+        error_msg = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"
+        print(f"Error en ETL: {error_msg}")
+        notify_etl_error(error_msg)
+        raise
 
 
 if __name__ == "__main__":
