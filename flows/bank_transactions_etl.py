@@ -401,8 +401,8 @@ def detect_internal_transfers(client, user_id: str, categories_map: dict) -> dic
     return {"detected": len(to_update)}
 
 
-def sync_account(client, token: str, account: dict, categories_map: dict):
-    """Sincroniza una cuenta bancaria individual."""
+def sync_account(client, token: str, account: dict, categories_map: dict) -> tuple[int, str | None]:
+    """Sincroniza una cuenta bancaria individual. Retorna (transacciones añadidas, date_from)."""
     account_id = account["id"]
     user_id = account["user_id"]
     gc_account_id = account["gocardless_account_id"]
@@ -419,15 +419,18 @@ def sync_account(client, token: str, account: dict, categories_map: dict):
     raw = fetch_transactions(token, gc_account_id, last_sync_date)
     print(f"[{account_name}] Descargadas {len(raw)} transacciones")
 
+    transactions_added = 0
     if raw:
         normalized = normalize_transactions(raw)
         inserted = load_to_database(client, normalized, account_id)
-        print(f"[{account_name}] Guardadas {len(inserted)} transacciones")
+        transactions_added = len(inserted)
+        print(f"[{account_name}] Guardadas {transactions_added} transacciones")
 
         stats = auto_categorize(client, inserted, user_id, categories_map)
         print(f"[{account_name}] Auto-categorizadas: {stats['categorized']}/{stats['total']} ({stats['percentage']}%)")
 
     update_account_last_sync(client, account_id)
+    return transactions_added, last_sync_date
 
 
 def main():
@@ -448,8 +451,13 @@ def main():
         token = get_access_token()
         categories_map = get_categories_by_name(client)
 
+        total_transactions = 0
+        earliest_date = None
         for account in accounts:
-            sync_account(client, token, account, categories_map)
+            added, date_from = sync_account(client, token, account, categories_map)
+            total_transactions += added
+            if date_from and (earliest_date is None or date_from < earliest_date):
+                earliest_date = date_from
 
         # Detectar transferencias internas por usuario
         user_ids = set(account["user_id"] for account in accounts)
@@ -464,7 +472,11 @@ def main():
             print(f"Transferencias internas detectadas: {total_detected}")
 
         print("ETL completado")
-        notify_etl_success(accounts_count=len(accounts), transfers_detected=total_detected)
+        notify_etl_success(
+            accounts_count=len(accounts),
+            transactions_added=total_transactions,
+            transfers_detected=total_detected,
+        )
 
     except Exception as e:
         error_msg = f"{type(e).__name__}: {e}\n{traceback.format_exc()}"

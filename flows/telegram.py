@@ -44,14 +44,16 @@ def send_telegram_message(message: str, parse_mode: str = "HTML") -> bool:
         return False
 
 
-def notify_etl_success(accounts_count: int, transfers_detected: int = 0):
+def notify_etl_success(accounts_count: int, transactions_added: int = 0, transfers_detected: int = 0, date_from: str | None = None):
     """Notifica que el ETL completó exitosamente."""
-    timestamp = datetime.now().strftime("%d/%m/%Y %H:%M")
+    message = f"<b>✅ Carga de transacciones completada</b>\n\n"
 
-    message = (
-        f"<b>✅ ETL Completado</b>\n\n"
-        f"📅 {timestamp}\n"
+    if date_from:
+        message += f"📅 Desde: {date_from}\n"
+
+    message += (
         f"🏦 Cuentas sincronizadas: {accounts_count}\n"
+        f"💳 Transacciones añadidas: {transactions_added}\n"
     )
 
     if transfers_detected > 0:
