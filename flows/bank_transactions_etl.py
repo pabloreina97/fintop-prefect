@@ -94,13 +94,20 @@ def normalize_transactions(transactions: list) -> list:
     return normalized
 
 
-def load_to_database(client, transactions: list, account_id: str) -> list:
+def load_to_database(client, transactions: list, account_id: str) -> tuple[list, int]:
     """
     Inserta transacciones en transactions_raw.
-    Retorna los IDs de las transacciones insertadas/actualizadas.
+    Retorna (transacciones insertadas/actualizadas, número de transacciones realmente nuevas).
     """
     if not transactions:
-        return []
+        return [], 0
+
+    # Consultar qué transaction_ids ya existen para descontar el overlap
+    tx_ids = [tx["transaction_id"] for tx in transactions]
+    existing = client.table("transactions_raw").select("transaction_id").eq(
+        "account_id", account_id
+    ).in_("transaction_id", tx_ids).execute()
+    existing_ids = {row["transaction_id"] for row in existing.data}
 
     rows = [
         {
@@ -132,7 +139,8 @@ def load_to_database(client, transactions: list, account_id: str) -> list:
         on_conflict="account_id,transaction_id",
     ).execute()
 
-    return result.data
+    new_count = len(result.data) - len(existing_ids)
+    return result.data, new_count
 
 
 def get_categorization_rules(client, user_id: str | None) -> list:
@@ -422,11 +430,11 @@ def sync_account(client, token: str, account: dict, categories_map: dict) -> tup
     transactions_added = 0
     if raw:
         normalized = normalize_transactions(raw)
-        inserted = load_to_database(client, normalized, account_id)
-        transactions_added = len(inserted)
-        print(f"[{account_name}] Guardadas {transactions_added} transacciones")
+        upserted, new_count = load_to_database(client, normalized, account_id)
+        transactions_added = new_count
+        print(f"[{account_name}] Guardadas {len(upserted)} transacciones ({new_count} nuevas)")
 
-        stats = auto_categorize(client, inserted, user_id, categories_map)
+        stats = auto_categorize(client, upserted, user_id, categories_map)
         print(f"[{account_name}] Auto-categorizadas: {stats['categorized']}/{stats['total']} ({stats['percentage']}%)")
 
     update_account_last_sync(client, account_id)
